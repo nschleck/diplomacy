@@ -6,6 +6,7 @@ The code is *almost* completely runable at the moment. Future updates will fix t
 1. Convoy orders don't totally work yet - specifically, input is not handled in moveFunctions properly
 2. Path function needs to be expanded to handle edge cases of multiple paths -- I need to look up the rules on this one.
 3. Multiple Coasts haven't been implemented to bulgaria, spain, etc. This will affect fleet movement and maybe convoying?
+4. Add easier input for initial unit conditions for testing (sandbox)
 
 
 Future big updates, after getting the code watertight:
