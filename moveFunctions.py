@@ -7,8 +7,6 @@ from boardSetup import territories as territories
 
 def validMove(terrs, startPoint, endPoint, unitType): #returns whether the selected unit can move from start to end point
 
-    #TODO - add double coast territories
-
     if startPoint not in terrs or endPoint not in terrs:    #checks to see that start and end points are real
         return False
     elif endPoint not in terrs[startPoint]["borders"]:    #checks to see if the given end point borders the start point
@@ -25,6 +23,7 @@ def validMove(terrs, startPoint, endPoint, unitType): #returns whether the selec
                 if terrs[connectingSea]["type"] == "sea" and startPoint in terrs[connectingSea]["borders"] and endPoint in terrs[connectingSea]["borders"]:
                     return True
             return False
+            #TODO check for mult coast terrs
     return True
 
 
@@ -32,7 +31,7 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
     #input order cleanup: - (a bit clunky at the moment but it kind of works)
     order = (inputOrder.lower()).split()
     try:
-        if order[0] in ("a", "army", "n", "navy"):
+        if order[0] in ("a", "army", "f", "fleet"):
             del order[0]
         order[1]    #fails if the list has less than 2 remaining items
         if len(order) > 2:
@@ -46,34 +45,49 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
     moveTargetStart = ''
     moveTargetEnd = ''
     unit = order[0]
+    convoyedMove = False
+    fleetMCTMove = False
 
 
     #checks for valid user unit location   
     if unit not in nation:
         print("\t\tNo user unit found in " + str(unit))
         return
-    #else:
-        #print("User unit found in " + str(terrs[unit]["name"]) + ". Type - " + str(nation[unit]["type"]))
     if unit in turnMoves:
         print("\t\tOrder already exists for " + unit + "; previous order has been overwritten")
 
     unitType = nation[unit]["type"]
 
-
     #sorts input into move types
     orderType = order[1]
     if orderType in ("move", "moves", "attack", "attacks", "to", "m", ">"):
         moveType = 'move'
-        #print("Move type = " + moveType)
 
         try:
             moveTargetEnd = order[2]
         except IndexError:
             print ("\t\tMove format not recognized. Try again.\n")
             return
+
+        #Checks if the target is a multiple coast territory
+        if moveTargetEnd in ["bul",'spa',"stp"] and unitType == "fleet":
+            try:
+                unitCoast = order[3]
+            except:
+                print("\t\tPlease specify a coast for this fleet to move to.")
+                return               
+            if unitCoast in territories[moveTargetEnd]["coasts"] and unit in territories[moveTargetEnd].get(unitCoast + " borders", []):
+                fleetMCTMove = True
+            else:
+                print("\t\tPlease specify a valid coast for this fleet to move to.")
+                return                  
+
+        #move via convoy
+        if "via" in order and "convoy" in order:
+            convoyedMove = True
+
     elif orderType in ("support", "supports", "s"):
         moveType = 'support'
-        #print("Move type = " + moveType)
 
         if len(order) > 4:
             if order[4] not in terrs or order[2] not in terrs:
@@ -88,7 +102,6 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
             moveTargetEnd = order[2]
     elif orderType in ("convoy", "convoys", "c"):
         moveType = 'convoy'
-        #print("Move type = " + moveType)
 
         if len(order) > 4:
             if order[4] not in terrs or order[2] not in terrs:
@@ -97,11 +110,10 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
             moveTargetEnd = order[4]
             moveTargetStart = order[2]
         else:
-            print("\t\tConvoy order format not recognized. Try again with the format: unit convoys unit to territory")
+            print("\t\tConvoy order format not recognized. Try again with the format: unit convoys A to B")
             return
     elif orderType in ("hold", "holds", "h"):
         moveType = 'hold'
-        #print("Move type = " + moveType)
 
         moveTargetEnd = order[0]
     else:
@@ -114,15 +126,23 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
         print ("\t\tMove target location not recognized. Try again.\n")
         return    
 
-    #checks for a valid move
-    if not validMove(terrs, unit, moveTargetEnd, unitType) and moveType not in ("convoy", "hold"):
+    #checks for a valid move #TODO amend for convoyed 
+    if not validMove(terrs, unit, moveTargetEnd, unitType) and moveType not in ("convoy", "hold") and not convoyedMove:
         print("\t\tInvalid move - %s in %s cannot %s %s\n" % (unitType,terrs[order[0]]["name"],moveType,moveTargetName))
         return
-    elif len(order) > 4:
+    elif len(order) > 4 and not convoyedMove:
         if moveType == "convoy" and unitType == "army":
             print("\t\tArmies can't convoy units. Try again.\n")
             return
         print("\t\tValid move - %s in %s %s %s to %s\n" % (unitType,terrs[order[0]]["name"],moveType,terrs[moveTargetStart]["name"],moveTargetName))
+    elif convoyedMove:
+        if unitType == "fleet":
+            print("\t\tFleets can't be convoyed. Try again.\n")
+            return
+        if terrs[order[0]]["type"] != "coast" or terrs[moveTargetEnd]["type"] != "coast":
+            print("\t\tConvoys may only happen from one coastal territory to another. Try again.\n")
+            return        
+        print("\t\tValid move - %s in %s moves via convoy to %s\n" % (unitType,terrs[order[0]]["name"],moveTargetName))
     else:
         print("\t\tValid move - %s in %s %s %s\n" % (unitType,terrs[order[0]]["name"],moveType,moveTargetName))
     
@@ -131,8 +151,6 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
         'nation' : nationality,
         "unit type" : unitType,
         "order" : moveType,
-        #"target start" : moveTargetStart, 
-        #'target end' : moveTargetEnd,
         'outcome' : "undecided",
         "dislodge status" : "undecided"
     }
@@ -146,7 +164,12 @@ def inputUserMove(inputOrder, terrs, nation, turnMoves, nationality): #Adds user
         turnMoves[unit]['target end'] = moveTargetEnd
     if moveType == "convoy" or (moveType == "support" and turnMoves[unit]["support type"] == "move support"):
         turnMoves[unit]['target start'] = moveTargetStart
-    #TODO -- add in "via convoy" move type for move orders
+    if convoyedMove:
+        turnMoves[unit]['move type'] = "via convoy"
+    if fleetMCTMove:
+        turnMoves[unit]['coast'] = unitCoast
+    
+    
 
     return unit
 
@@ -158,6 +181,8 @@ def getUserMoves(terrs, nation, turnMoves, nationality): #Prompts user for all t
         unAssUnitsStr = ''
         for unit in unassignedUnits:
             unAssUnitsStr += (str(nation[unit]["type"]) + ' in ' + str(terrs[unit]["name"]) + " (" + unit + "), ")
+            if nation[unit].get("coast","") != "": #sloppy code here
+                unAssUnitsStr += nation[unit].get("coast","") + " coast, "
         unAssUnitsStr = unAssUnitsStr[:-2]
         print("\tUnassigned user units: " + unAssUnitsStr + ". Enter the order \"hold all\" to hold all remaining units")
         userMove = input("\tEnter order:")
@@ -314,10 +339,19 @@ def build(terrs, allUnits, nation, buildCount):
         if unitType == "fleet" and terrs[unitArea]["type"] == "land":
             print("\tYou cannot build a fleet on land, dumb dumb.")
             continue
+        stpCoast = ''
+        if unitType == "fleet" and unitArea == "stp":            
+            stpCoast = input("\tBuild fleet on north or south coast?  ")
+            if stpCoast not in ["north","south"]:
+                print("\tCoast not recognized")
+                continue
+        
 
         if terrs[unitArea]["supplyCenter"] and terrs[unitArea].get("homeCenter", '') == nation and terrs[unitArea]["country"] == nation:
             print("\t\t" + (str(unitType)).capitalize() + " built in " + str(terrs[unitArea]["name"]))
             allUnits[nation][unitArea] = {"type" : unitType}
+            if stpCoast != '':
+                allUnits[nation][unitArea]["coast"] = stpCoast
         else:
             #invalid build
             print("\tYou cannot build a(n) " + str(unitType) + " in " + str(terrs[unitArea]["name"]))
