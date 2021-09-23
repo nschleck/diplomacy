@@ -1,9 +1,14 @@
 ### Main code body for running a Diplomacy game
 
 ################################################## Initial Setup and Imports ########################################################
+import pprint, os, copy
+# Set main.py file location as CWD #
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# Gamefunction Imports #
 import boardSetup, adjudicator
 import moveFunctions as move
-import pprint
+
 # GUI Imports #
 import tkinter as tk
 from PIL import Image, ImageTk
@@ -40,7 +45,7 @@ def graphicsWindow(master):
     graphicsCanvas.pack()
     return graphicsCanvas, graphicsFrame
 def textWindow(master, year_string): 
-    global textFrame, text_title, textSubframe, scrollbar, text
+    global textFrame, text_title, textSubframe, scrollbar, text, buttonFrame
     textFrame = tk.Frame(master, bg="#4f5763", width=300, height=1010, padx=5, pady=10)
     textFrame.grid(row=0,column=1)
 
@@ -76,22 +81,39 @@ def textWindow(master, year_string):
     text.tag_config("fail", foreground="#ffa3a3")
     text.tag_config("success", foreground="#84db84")
 
-    return textFrame, text_title, textSubframe, scrollbar, text
+    #button frame
+    buttonFrame = tk.Frame(textFrame, bg="#616b7a", width=300, height=100, padx=5, pady=10, relief=tk.RIDGE)
+    buttonFrame.pack()
 
-def buttonNext(master):
+    return textFrame, text_title, textSubframe, scrollbar, text, buttonFrame
+
+def buttonNext(master, button_text, col):
     global button_results
     var = tk.IntVar()                   # Dummy variable
     button_results = tk.Button(master, 
-        text="Next>>", 
+        text=button_text, 
         command = lambda: var.set(1), 
         bg="#4f5763", fg="white",
         font=("Courier", 12))
-    button_results.pack()
+    button_results.grid(row=0,column=col)
     button_results.wait_variable(var)   #Execution waits until var is altered by button press
     button_results.pack_forget()
     return button_results
+def closeWindow():
+    #global root
+    root.destroy()
 
-# TODO kloogy - placeholder empty icon images
+"""def buttonQuit(master, root_window):
+    #global button_quit
+    button_quit = tk.Button(master, 
+        text="Exit", 
+        command = root_window.destroy, 
+        bg="#4f5763", fg="white",
+        font=("Courier", 12))
+    button_quit.pack()
+    return button_quit"""
+
+# TODO kloogy workaround - placeholder empty icon images
 build_icon = None
 convoy_icon = None
 disband_icon = None
@@ -99,7 +121,7 @@ dislodged_icon = None
 hold_icon = None
 fail_icon = None
 # Initialize globals so images don't get garbage collected
-bg_image = None #TODO?
+bg_image = None
 all_units = None
 button_results = None
 
@@ -107,9 +129,8 @@ def drawBackground(canv):
     global bg_image
     bg_image = ImageTk.PhotoImage(Image.open("GUI\\bg_small.jpg"))
     canv.create_image(0,0,image=bg_image,anchor="nw")
-    return bg_image
 
-############################## GUI -- Define Unit Classes #TODO use this outside of GUI ###################################################
+############################## GUI -- Define Unit Classes ###################################################
 class Unit:
     def __init__(self, nation, territory, order, status):
         self.nation = nation
@@ -121,7 +142,7 @@ class Unit:
         self.x_pos = terrs[territory]["x_coord"] #TODO pull coordinates from territory info
         self.y_pos = terrs[territory]["y_coord"] #TODO pull coordinates from territory info
 
-    def __str__(self):
+    def __str__(self) -> str:
         return '{} {} in {} -- order: {}'.format(self.nation, self.unitType, self.territory, self.order)
 
     def drawUnit(self):
@@ -142,13 +163,19 @@ class Unit:
         graphicsCanvas.create_image(self.x_pos, self.y_pos + 23, image= hold_icon, anchor="center")
 
     # Harder Draw Methods
-    def calculateLineOffsets(self, offset, targ_x, targ_y):
+    def calculateLineOffsets(self, offset, targ_x, targ_y): 
+        #TODO delta_x = 0? which way does arrow go?
         # Quick Maths - calculate offsets for line start and endpoints
         delta_x = targ_x - self.x_pos
         delta_y = targ_y - self.y_pos
-        theta = math.atan(delta_y / delta_x)
-        offset_y = int(math.sin(theta) * offset)
-        offset_x = int(math.cos(theta) * offset)
+        try:
+            theta = math.atan(delta_y / delta_x)
+            offset_y = int(math.sin(theta) * offset)
+            offset_x = int(math.cos(theta) * offset)
+        except ZeroDivisionError:
+            offset_y = offset
+            offset_x = 0
+
         if delta_x < 0:
             offset_x = offset_x * -1
             offset_y = offset_y * -1
@@ -159,14 +186,14 @@ class Unit:
         target_x = terrs[target]["x_coord"]
         target_y = terrs[target]["y_coord"]
 
-        offset_x, offset_y = self.calculateLineOffsets(15, target_x, target_y)
+        offset_x, offset_y = self.calculateLineOffsets(5, target_x, target_y)
 
         # Draw Line
         start_x = self.x_pos + offset_x
         start_y = self.y_pos + offset_y
         end_x = target_x - offset_x
         end_y = target_y - offset_y
-        graphicsCanvas.create_line(start_x, start_y, end_x, end_y,  width = 3, fill=unitColors[self.nation], arrow=tk.LAST, arrowshape=(20,30,8))
+        graphicsCanvas.create_line(start_x, start_y, end_x, end_y,  width = 3, fill=unitColors[self.nation], arrow=tk.LAST, arrowshape=(15,20,6))
     def drawUnitSupport(self, target, target_start): #TODO NTH
         
         # Hold Support
@@ -177,8 +204,8 @@ class Unit:
             offset_x, offset_y = self.calculateLineOffsets(25, target_x, target_y)
             
             # Draw Line
-            start_x = self.x_pos + offset_x
-            start_y = self.y_pos + offset_y
+            start_x = self.x_pos + int(offset_x * (2/5)) #Bring line start closer to unit
+            start_y = self.y_pos + int(offset_y* (2/5)) #Bring line start closer to unit
             end_x = target_x - offset_x
             end_y = target_y - offset_y
             graphicsCanvas.create_line(start_x, start_y, end_x, end_y,  width = 3, fill=unitColors[self.nation])
@@ -189,13 +216,13 @@ class Unit:
             target_x = abs(int((terrs[target]["x_coord"] + terrs[target_start]["x_coord"]) / 2 ))
             target_y = abs(int((terrs[target]["y_coord"] + terrs[target_start]["y_coord"]) / 2 ))
 
-            offset_x, offset_y = self.calculateLineOffsets(25, target_x, target_y)
+            offset_x, offset_y = self.calculateLineOffsets(10, target_x, target_y)
             
             # Draw Line
             start_x = self.x_pos + offset_x
             start_y = self.y_pos + offset_y
-            end_x = target_x - int(offset_x * (2/5))
-            end_y = target_y - int(offset_y * (2/5))
+            end_x = target_x - offset_x
+            end_y = target_y - offset_y
             graphicsCanvas.create_line(start_x, start_y, end_x, end_y,  width = 3, fill=unitColors[self.nation])
             graphicsCanvas.create_oval(target_x - 10, target_y - 10, target_x + 10, target_y + 10,  width = 3, outline=unitColors[self.nation])          
     def drawMoveFails(self, target):
@@ -220,7 +247,6 @@ class Unit:
         icon_y = int((target_y + self.y_pos) / 2)
 
         graphicsCanvas.create_image(icon_x, icon_y, image= fail_icon, anchor="center")
-
 class Army(Unit):
     def __init__(self, nation, territory, order, status):
         super().__init__(nation, territory, order, status)
@@ -253,10 +279,24 @@ def UnitList(turnMoves):
 
     return unit_list
 
-def drawUnits(Units): # 1 -> Draws Units
+def BuildsUnitList(turnMoves):        #TODO dummy repeat function for handling allUnits list Unit object initialization
+    unit_list = []
+    for nation in turnMoves:
+        for unit in turnMoves[nation]:
+            if turnMoves[nation][unit]["type"] == "army":
+                unitObj = Army(nation, unit, None, None)
+            elif turnMoves[nation][unit]["type"] == "fleet":
+                unitObj = Fleet(nation, unit, None, None)
+        
+            # Add unitObj to unitList
+            unit_list.append(unitObj)
+
+    return unit_list
+
+def drawUnits(Units):                   # 1 -> Draws Units
     for Unit in Units:
         Unit.drawUnit()
-def drawMoves(Units, unitMoves): # 2 -> Draws Unit Moves and writes them to the text frame
+def drawMoves(Units, unitMoves):        # 2 -> Draws Unit Moves and writes them to the text frame
     global text
     text.insert(tk.INSERT, 'Orders: \n')
 
@@ -330,56 +370,104 @@ def drawMoveOutcomes(Units, unitMoves): # 3 -> Draws Move Outcomes and writes th
         if Unit.status == "dislodged":
             Unit.drawUnitDislodged()
             text.insert(tk.INSERT, '-> {} {} in {} is dislodged\n'.format(unit_nation, unit_type, unit_territory), ("fail"))        
-def drawRetreats(Units, dislodgedList):    #TODO # 4 -> Draws Unit Retreat Moves -> TODO:Remove destroyed units?
+def drawRetreats(Units, unitMoves, dislodgedList): # 4 -> Draws Unit Retreat Moves
+    global text
     for Unit in Units:
-        if Unit.status == "dislodged":
-            Unit.drawUnitMove()
-def drawBuildsAndDisbands(Units): #TODO # 5 -> (Winter Only) Draws Builds / Disbands
-    for Unit in Units:
-        if Unit.order == "build":
+        unit_nation = nationality[Unit.nation][Unit.nation]
+        if Unit.status == "dislodged":  #draw dislodged unit retreats
+            retreatTarget = dislodgedList[Unit.nation][Unit.territory]["dislodge target"]
+            unit_terr = terrs[Unit.territory]["name"]
+            try:
+                Unit.drawUnitMove(retreatTarget)
+                unit_retreat = terrs[retreatTarget]["name"]
+                text.insert(tk.INSERT, '-> {} {} in {} -- retreats to {}\n'.format(unit_nation, Unit.unitType, unit_terr, unit_retreat))
+            except KeyError:
+                Unit.drawUnitDisband()            
+                text.insert(tk.INSERT, '-> {} {} in {} disbands\n'.format(unit_nation, Unit.unitType, unit_terr))
+        elif Unit.order == "move" and unitMoves[Unit.territory]["outcome"] == "moves":  #draw successfully moving units
+            target = unitMoves[Unit.territory]["target end"]
+            Unit.drawUnitMove(target)    
+
+def drawBuildsAndDisbands(Units, prevUnits, unitlist, prev_unitlist): #TODO # 5 -> (Winter Only) Draws Builds / Disbands
+    global text
+    u_list = []
+    p_list = []
+    for nation in unitlist:
+        for unit in unitlist[nation]:            
+            u_list.append(unit)
+    for nation in prev_unitlist:
+        for unit in prev_unitlist[nation]:            
+            p_list.append(unit)
+
+    for Unit in Units:  #Find all new units and indicate a build
+        unit_nation = nationality[Unit.nation][Unit.nation]
+        unit_type = Unit.unitType
+        unit_territory = terrs[Unit.territory]["name"]
+        if Unit.territory not in p_list:
             Unit.drawUnitBuild()
-        elif Unit.order == "disband":
+            text.insert(tk.INSERT, '-> {} {} built in {}\n'.format(unit_nation, unit_type, unit_territory), ("success"))
+    for Unit in prevUnits:  #Find all missing units and indicate a disband
+        unit_nation = nationality[Unit.nation][Unit.nation]
+        unit_type = Unit.unitType
+        unit_territory = terrs[Unit.territory]["name"]
+        if Unit.territory not in u_list:
             Unit.drawUnitDisband()
+            text.insert(tk.INSERT, '-> {} {} in {} is disbanded\n'.format(unit_nation, unit_type, unit_territory), ("fail"))
+
+    ''
 
 ######################################## GUI -- Phase Functions ############################################
 
-def phaseMoveDraw(turnMoves,buttonMaster):#TODO NTH
+def phaseMoveDraw(turnMoves,button_frame, graphics_canvas):#TODO NTH
     global text
     global all_units
     
-    drawBackground(graphicsCanvas) #Draw gameboard Background
+    drawBackground(graphics_canvas) #Draw gameboard Background #TODO pass in graphicsCanvas, root?
     all_units = UnitList(turnMoves)
     
     drawUnits(all_units)    #Draw all units on gameboard
-    buttonNext(buttonMaster) # "NEXT" button input ->
+    buttonNext(button_frame,"Next>>",0) # "NEXT" button input ->
     
     drawMoves(all_units, turnMoves) #Draw all unit orders on gameboard; list text commands to text frame
-    drawUnits(all_units)
-    buttonNext(buttonMaster) # "NEXT" button input ->
+    buttonNext(button_frame,"Next>>",0) # "NEXT" button input ->
     
     drawMoveOutcomes(all_units, turnMoves) #Draw all order outcomes on gameboard; list outcomes on text frame
     
     text.insert(tk.INSERT, "\n ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ \n\n") #Footer Bar
+    buttonNext(button_frame,"Continue",0)
+    closeWindow()
 
     #TODO -- save gamestate?
-def phaseDislodgeDraw(turnMoves, dislodged_units, buttonMaster):#TODO
+def phaseDislodgeDraw(turnMoves, dislodged_units, button_frame, graphics_canvas):#TODO
     global text
     global all_units
-    #Draw gameboard Background
-    drawBackground(graphicsCanvas)
+    
+    drawBackground(graphics_canvas) #Draw gameboard Background
     all_units = UnitList(turnMoves)
-    #Draw all units on gameboard
-    drawUnits(all_units)
-    buttonNext(buttonMaster) # "NEXT" button input ->
-    #Draw all retreat orders on gameboard; list text commands to text frame
-    drawRetreats(all_units, dislodged_units)
-def phaseBuildDraw(turnMoves):#TODO
-    units = UnitList(turnMoves)
-    drawUnits(units)
-    # "NEXT" button input ->
-    drawBuildsAndDisbands(units)
+    
+    drawUnits(all_units) #Draw all units on gameboard
+    for Unit in all_units: #indicate dislodged units        
+        if Unit.status == "dislodged":
+            Unit.drawUnitDislodged()
+    buttonNext(button_frame,"Next>>",0) # "NEXT" button input ->
+    
+    drawRetreats(all_units, turnMoves, dislodged_units) #Draw all retreat orders on gameboard; list text commands to text frame
+    buttonNext(button_frame,"Continue",0)    # Close window, continue to next phase ->
+    closeWindow()
+def phaseBuildDraw(units_list, prebuild_units_list, button_frame, graphics_canvas):#TODO
+    global text
+    global all_units
 
+    drawBackground(graphics_canvas) #Draw gameboard Background
+    all_Units = BuildsUnitList(units_list)
+    previous_Units = BuildsUnitList(prebuild_units_list)
 
+    drawUnits(all_Units)
+    buttonNext(button_frame,"Next>>",0) # "NEXT" button input ->
+
+    drawBuildsAndDisbands(all_Units, previous_Units, units_list, prebuild_units_list)
+    buttonNext(button_frame,"Continue",0)    # Close window, continue to next phase ->
+    closeWindow()
 
 ######################################### Main Game Loop ##############################################
 # Initialize some Variables
@@ -396,6 +484,7 @@ for m in allUnits.keys():
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# MAIN GAME LOOP #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 while True:
+    # Update gamestate counters
     turnNumber += 1
     yearNumber = 1900 + (turnNumber + 1) // 2
     yearString = yearState[(turnNumber + 1) % 2] + str(yearNumber) #e.g. "Spring 1901"
@@ -416,25 +505,22 @@ while True:
     #Adjudicate user moves and return outcomes/dislodge status
     print("Adjudicating turn outcome..." )
     adjudedMoves = adjudicator.adjudicate(turnMoves)
-    print()
 
-            ################################## GUI ##########################################################
+    #-------------------------------- MOVE GUI ------------------------------------#
     root = rootWindow()
     graphicsCanvas, graphicsFrame = graphicsWindow(root)
-    textFrame, text_title, textSubframe, scrollbar, text = textWindow(root, yearString)
+    textFrame, text_title, textSubframe, scrollbar, text, buttonFrame = textWindow(root, yearString)
 
-    # TODO kloogy - load in icon images
-    build_icon = ImageTk.PhotoImage(Image.open("GUI\\build_icon.png").resize((60,60), Image.ANTIALIAS))
+    #kloojey - load in icon images
     convoy_icon = ImageTk.PhotoImage(Image.open("GUI\\convoy_icon.png").resize((50,9), Image.ANTIALIAS))
-    disband_icon = ImageTk.PhotoImage(Image.open("GUI\\disband_icon.png").resize((50,50), Image.ANTIALIAS))
     dislodged_icon = ImageTk.PhotoImage(Image.open("GUI\\dislodge_icon.png").resize((60,60), Image.ANTIALIAS))
     hold_icon = ImageTk.PhotoImage(Image.open("GUI\\hold_icon.png").resize((50,4), Image.ANTIALIAS))
     fail_icon = ImageTk.PhotoImage(Image.open("GUI\\disband_icon.png").resize((25,25), Image.ANTIALIAS))
 
-    phaseMoveDraw(adjudedMoves, textFrame)
+    phaseMoveDraw(adjudedMoves, buttonFrame, graphicsCanvas)
 
-    #root.mainloop()????
-            #################################################################################################
+
+    #------------------------------------------------------------------------------#
 
     #Write adjuded moves to dicts of new unit positions, and dislodged units
     print(yearString + " Move Outcomes: \n" )
@@ -447,25 +533,36 @@ while True:
 ############################### DISLODGE PHASE #######################################
     print(yearString + " Dislodge Phase: \n" )
     userDislodgeList = {}
+    dislodge_guiTrigger = None
     for nation in nationality.keys():    
         if dislodgedUnits[nation] != {}:            
             print("\t" + nationality[nation][nation] + " dislodged units -- please specify where to dislodge:")
             userDislodgeList[nation] = move.getUserDislodges(dislodgedUnits[nation], allUnits)
+            dislodge_guiTrigger = True
 
-    #TODO:pass adjudedMoves and dislodgedUnits to gui dislodge function
-    #gui.phaseDislodgeDraw(adjudedMoves, dislodgedUnits)
+    #--------------------------- DISLODGE GUI --------------------------------#
+    if dislodge_guiTrigger:
+        #bg_image = None
+        root = rootWindow()
+        graphicsCanvas, graphicsFrame = graphicsWindow(root)
+        textFrame, text_title, textSubframe, scrollbar, text, buttonFrame = textWindow(root, yearString)
 
-    #These should come after all-nations loop
+        disband_icon = ImageTk.PhotoImage(Image.open("GUI\\disband_icon.png").resize((50,50), Image.ANTIALIAS))
+        dislodged_icon = ImageTk.PhotoImage(Image.open("GUI\\dislodge_icon.png").resize((60,60), Image.ANTIALIAS))
+
+        phaseDislodgeDraw(adjudedMoves, dislodgedUnits, buttonFrame, graphicsCanvas)
+
+    #-------------------------------------------------------------------------#
+
+    #modify Units List with retreat order adjudication
     allUnits = adjudicator.adjudicateDislodge(userDislodgeList, allUnits)
 
-
 ############################### BUILD PHASE #######################################
-    if turnNumber % 2 == 0 and gameType != "custom":
+    if turnNumber % 2 == 0:# and gameType != "custom":
         yearString = "Winter " + str(yearNumber)
         print("\n"+ yearString + ": Build/Disband Phase")
 
-        builds = {} #TODO
-        disbands = {} #TODO
+        pre_build_units = copy.deepcopy(allUnits) #TODO fix 
 
         #modify terrs to set supplycenter ownership
         for nation in nationality.keys():
@@ -485,18 +582,33 @@ while True:
             elif buildCount == 0:
                 print("\n\t" + nation.capitalize() + " has no builds or disbands to make.")
 
+        #--------------------------- DISLODGE GUI --------------------------------#
+        root = rootWindow()
+        graphicsCanvas, graphicsFrame = graphicsWindow(root)
+        textFrame, text_title, textSubframe, scrollbar, text, buttonFrame = textWindow(root, yearString)
 
-        #TODO: figure out how to implement gui build/disband draws
+        build_icon = ImageTk.PhotoImage(Image.open("GUI\\build_icon.png").resize((60,60), Image.ANTIALIAS))
+        disband_icon = ImageTk.PhotoImage(Image.open("GUI\\disband_icon.png").resize((50,50), Image.ANTIALIAS))
+
+        phaseBuildDraw(allUnits, pre_build_units, buttonFrame, graphicsCanvas)
+
+        #-------------------------------------------------------------------------#
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~# /end main loop #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-##################################################### Testing Code ######################################################
+##################################################### Testing Code, TODO list ######################################################
 
 #TODO -- fix print formatting
 #TODO -- fully integrate GUI loop
 #TODO -- get multiple coasts, convoys,.... to work
+#TODO -- refactor everything -- streamline, get rid of useless variables, structure some classes, figure out dependencies, etc.
 
 #GUI
 #TODO: add a button to hide units, arrows so you can see labels?
+#TODO: add a quit button after each phase?
 #TODO: implement a time delay and/or animation to each move
+#TODO: fix overlapping symbols, i.e. head to head battles
+#TODO: implement a single, continuous window for whole game
+#root.mainloop()????
+

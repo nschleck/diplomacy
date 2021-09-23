@@ -259,6 +259,8 @@ territories = {             #dictionary containing all initial conditions of the
         "supplyCenter":False,
         "borders":["spa","mid","bre","par","bur","mar"],
         "occupied":False,
+        "x_coord": 330,
+        "y_coord": 700
     },
     "gre" : {
         "name":"Greece",
@@ -580,8 +582,8 @@ territories = {             #dictionary containing all initial conditions of the
         "supplyCenter":True,
         "borders":["tri","bud","rum","bul","gre","alb"],
         "occupied":False,
-        "x_coord": 710,
-        "y_coord": 880
+        "x_coord": 720,
+        "y_coord": 770
     },
     "sev" : {
         "name":"Sevastapol",
